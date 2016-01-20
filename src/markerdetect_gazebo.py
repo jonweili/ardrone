@@ -51,7 +51,7 @@ def callback(data):
         quad_y = data.pose[quadrotor_id].position.y
         quad_z = data.pose[quadrotor_id].position.z
 
-        max_viewing_distance = quad_z / 2. * CAMERA_ANGLE
+        max_viewing_distance = 1000.#quad_z / 2. * CAMERA_ANGLE
 
         quad_qw = data.pose[quadrotor_id].orientation.w
         quad_theta = math.acos(quad_qw) * 2
@@ -90,13 +90,13 @@ def callback(data):
                     theta_local = marker_theta - quad_theta
 
 
-                    rospy.loginfo("tag detected at: " + str(B_local.item(0)) + ", " + str(B_local.item(1)) + " rad: " + str(theta_local))
-
                     marker = Marker()
 
                     marker.x = B_local.item(0)
                     marker.y = B_local.item(1)
                     marker.theta = theta_local
+
+                    rospy.loginfo("tag detected at: " + str(round(marker.x,2)) + ", " + str(round(marker.y,2)) + " rad: " + str(round(marker.theta,3)))
 
                     markers.append(marker)
 

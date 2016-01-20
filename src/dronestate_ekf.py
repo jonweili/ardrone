@@ -60,7 +60,7 @@ class DroneStateEKF:
 
         # load marker positions from file
         # TODO: make configurable
-        filename = "/home/ros/catkin_ws/src/ardrone/src/christmas_markers.csv"
+        filename = "/home/ros/catkin_ws/src/ardrone/src/1_marker.csv"
         self.markers = []
         with open(filename, 'rb') as csvfile:
             marker_reader = csv.reader(csvfile, delimiter=',', quotechar='|')
@@ -84,8 +84,8 @@ class DroneStateEKF:
         ])
 
         # measurement noise
-        z_pos_noise_std = 0.01
-        z_yaw_noise_std = 0.03
+        z_pos_noise_std = 0.5
+        z_yaw_noise_std = 0.5
         self.R = np.array([
             [z_pos_noise_std*z_pos_noise_std,0,0],
             [0,z_pos_noise_std*z_pos_noise_std,0],
@@ -202,6 +202,9 @@ class DroneStateEKF:
 
         return x_p
 
+
+
+
     def calculatePredictStateJacobian(self, dt, x, u_linear_velocity, u_yaw_velocity):
         '''
         calculates the 3x3 Jacobian matrix for the predictState(...) function
@@ -225,6 +228,9 @@ class DroneStateEKF:
         F[1, 2] = temp[1]
 
         return F
+
+
+
 
     def predictCovariance(self, sigma, F, Q):
         '''
@@ -254,26 +260,36 @@ class DroneStateEKF:
 
 
     def callback_navdata(self, data):
+
+        # Probeersel, verpest voorspelling
+        self.sigma = self.sigma + self.R
+
         self.z = data.altd / 1000.
 
         current_time = time.time()
         dt = current_time - self.last_state_update
-        self.last_state_update = current_time
 
-        linear_velocity = np.array([
-            [data.vx / 1000.],
-            [data.vy / 1000.]
-        ])
+        # Force less updates, for testing
 
-        #print linear_velocity
+        if (dt > 0.):
+            self.last_state_update = current_time
 
-        yaw_velocity = ((data.rotZ - self.last_rotZ) / 360. * 2. * math.pi) / dt
+            linear_velocity = np.array([
+                [data.vx / 1000.],
+                [data.vy / 1000.]
+            ])
 
-        self.last_rotZ = data.rotZ
+            #print linear_velocity
 
-        self.state_callback(data.tm / 1000000., dt, linear_velocity, yaw_velocity)
+            print data.rotZ
+            yaw_velocity = ((data.rotZ - self.last_rotZ) / 360. * 2. * math.pi) / dt
 
-        self.publish()
+            self.last_rotZ = data.rotZ
+
+            self.state_callback(data.tm / 1000000., dt, linear_velocity, yaw_velocity)
+
+            print "State update"
+            self.publish()
 
 
 
@@ -296,23 +312,17 @@ class DroneStateEKF:
         :return - 3x3 Jacobian matrix of the predictMeasurement(...) function
         '''
 
-        # TODO: implement computation of H
+        s_yaw = math.sin(x[2])
+        c_yaw = math.cos(x[2])
 
-        xt = x[0]
-        yt = x[1]
-        sinphi = math.sin(x[2])
-        cosphi = math.cos(x[2])
+        dx = marker_position_world[0] - x[0];
+        dy = marker_position_world[1] - x[1];
 
-        xm = marker_position_world[0]
-        ym = marker_position_world[1]
-
-        H = np.array([
-            [-cosphi, -sinphi, -sinphi*(xm-xt) + cosphi*(ym-yt)],
-            [ sinphi, -cosphi, -cosphi*(xm-xt) - sinphi*(ym-yt) ],
-            [ 0, 0, -1]
+        return np.array([
+            [-c_yaw, -s_yaw, -s_yaw * dx + c_yaw * dy],
+            [ s_yaw, -c_yaw, -c_yaw * dx - s_yaw * dy],
+            [     0,      0,                      -1]
         ])
-
-        return H
 
     def calculateKalmanGain(self, sigma_p, H, R):
         '''
@@ -331,12 +341,10 @@ class DroneStateEKF:
         :return corrected state as 3x1 vector
         '''
 
-        # TODO: implement correction of predicted state x_predicted
+        residual = (z - z_predicted)
+        residual[2] = self.normalizeYaw(residual[2])
 
-        # np.dot(H, x_predicted) => predicted measurement
-        corrected_x = x_predicted + np.dot(K, (z - z_predicted))
-
-        return corrected_x
+        return x_predicted + np.dot(K, residual)
 
     def correctCovariance(self, sigma_p, K, H):
         '''
@@ -359,12 +367,18 @@ class DroneStateEKF:
         z_predicted = self.predictMeasurement(self.x, marker_position_world, marker_yaw_world)
 
         #print z
+
+        #print "predicted pos"
         #print z_predicted
 
         H = self.calculatePredictMeasurementJacobian(self.x, marker_position_world, marker_yaw_world)
         #print H
         K = self.calculateKalmanGain(self.sigma, H, self.R)
         #print K
+
+        state_from_marker = self.x - z + z_predicted
+        print "state from marker:"
+        print state_from_marker
 
         self.x = self.correctState(K, self.x, z, z_predicted)
         #print self.x
@@ -376,13 +390,16 @@ class DroneStateEKF:
         #print "#"
         for marker in data.markers:
 
-
+            #print "marker"
+            #print "detect: " +  str(marker.x) + ", " + str(marker.y) + " : " + str(marker.theta)
             m_world = self.get_marker([marker.x, marker.y, marker.theta])
+            #print "world: " +  str(m_world[0][0]) + ", " + str(m_world[0][1]) + " : " + str(m_world[1])
+
             self.measurement_callback(m_world[0], m_world[1], np.array([[marker.x],[marker.y]]), marker.theta)
 
 
-        # publish alleen op navdata (is de snelste van de twee, en is er altijd)
-        #self.publish()
+        print "Measurement update"
+        self.publish()
 
 
     def listener(self):

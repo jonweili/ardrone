@@ -1,11 +1,14 @@
 #!/usr/bin/env python
 import rospy
 import roslib
-from std_msgs.msg import Empty
+from std_msgs.msg import Empty, Int8
 from geometry_msgs.msg import Twist, Vector3
+from ardrone_autonomy.srv import FlightAnim
  
 if __name__ == '__main__':
     rospy.init_node('example_node', anonymous=True)
+
+
  
     # publish commands (send to quadrotor)
     pub_takeoff = rospy.Publisher('/ardrone/takeoff', Empty)
@@ -19,6 +22,7 @@ if __name__ == '__main__':
     pub_takeoff.publish(Empty())
 
     rospy.sleep(3.0)
+
 
     #t = Twist()
     #t.angular.z = 0.1

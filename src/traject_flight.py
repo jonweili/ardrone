@@ -25,7 +25,7 @@ class Trajectory:
 
         # load trajectory from file
         # TODO: make configurable (sys.argv contains list of arguments)
-        filename = "/home/ros/catkin_ws/src/ardrone/src/christmas_traject.csv"
+        filename = "/home/ros/catkin_ws/src/ardrone/src/hover_traject.csv"
         self.targets = []
         with open(filename, 'rb') as csvfile:
             trajectory_reader = csv.reader(csvfile, delimiter=',', quotechar='|')
@@ -48,10 +48,10 @@ class Trajectory:
         # PID constants for x, y, z and theta
 
         self.KP = np.array([
-            1.,
-            1.,
-            0.4,
-            0.5
+            0.1,
+            0.1,
+            0.2,
+            0.0
         ])
 
         self.KI = np.array([
@@ -62,10 +62,10 @@ class Trajectory:
         ])
 
         self.KD = np.array([
-            0.002,
-            0.002,
-            0.0002,
-            0.00002
+            0.000,
+            0.000,
+            0.0000,
+            0.00000
         ])
 
         # Store running error for I and D
@@ -112,10 +112,10 @@ class Trajectory:
             print "no targets left... goal reached"
 
             # TODO: hover
-            self.in_flight = False
+            #self.in_flight = False
             # Now: cycle
-            #self.current_target = 0
-            #self.target_position = self.targets[self.current_target]
+            self.current_target = 0
+            self.target_position = self.targets[self.current_target]
 
     # control functie toevoegen, aanroepen vanaf state callback
     def state_control(self):
@@ -202,6 +202,16 @@ class Trajectory:
         t.linear.y = max(-1, min(u[1], 1));
         t.linear.z = max(-1, min(u[2], 1));
 
+        # probeersel, hover als je bijna stil moet staan
+        min_speed = 0.00
+        if abs(t.linear.x) < min_speed:
+            t.linear.x = 0
+        if abs(t.linear.y) < min_speed:
+            t.linear.y = 0
+        if abs(t.linear.z) < min_speed:
+            t.linear.z = 0
+
+
         # TODO: also correct theta (doesn't work => calculation error or drone to inaccurate?)
         #t.angular.z = u[3]
 
@@ -210,8 +220,9 @@ class Trajectory:
 
         self.pub_velocity.publish(t)
 
-        #print "nav"
-        #print u
+        print "nav"
+        print u
+        print t
 
         self.last_error = current_error
         self.last_update_navdata = current_time
@@ -228,6 +239,10 @@ class Trajectory:
 if __name__ == '__main__':
 
     rospy.init_node('tag_simulator', anonymous=True)
+
+    #pub_flattrim = rospy.Service('/ardrone/flattrim',None, None)
+
+    #exit()
 
     # publish commands (send to quadrotor)
     pub_takeoff = rospy.Publisher('/ardrone/takeoff', Empty)
